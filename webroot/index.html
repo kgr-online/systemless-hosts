@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Systemless Hosts</title>
+<style>
+  :root {
+    --bg: #f2f2f4; --card: #ffffff; --border: #e2e2e6; --text: #1c1c1e;
+    --sub: #6b6b70; --accent: #2f6feb; --danger: #d5443c; --ok: #1d9e75;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101012; --card: #1c1c1e; --border: #2c2c2e; --text: #f2f2f4;
+      --sub: #9a9a9e; --accent: #4d8dff; --danger: #ff6b62; --ok: #3ecf94;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+    font-family: -apple-system, Roboto, sans-serif; font-size: 15px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--sub); font-size: 13px; margin: 0 0 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; margin-bottom: 12px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .status-text { font-weight: 600; }
+  .status-sub { color: var(--sub); font-size: 12px; margin-top: 2px; }
+  .switch { position: relative; width: 50px; height: 30px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0; background: var(--border); border-radius: 30px;
+    cursor: pointer; transition: .2s;
+  }
+  .slider:before {
+    content: ""; position: absolute; height: 24px; width: 24px; left: 3px; top: 3px;
+    background: white; border-radius: 50%; transition: .2s;
+  }
+  input:checked + .slider { background: var(--ok); }
+  input:checked + .slider:before { transform: translateX(20px); }
+  input:disabled + .slider { opacity: .5; cursor: default; }
+  input[type=text] {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 15px;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    border: none; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 10px; }
+  .btn-ghost { background: transparent; color: var(--sub); border: 1px solid var(--border); }
+  .add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .add-row button { flex-shrink: 0; }
+  .list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+    font-family: ui-monospace, monospace;
+  }
+  .list-item:last-child { border-bottom: none; }
+  .empty { text-align: center; color: var(--sub); padding: 20px 0; font-size: 13px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 20px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s;
+    max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+  .load-more { width: 100%; margin-top: 4px; }
+  .count-badge {
+    display: inline-block; background: var(--bg); color: var(--sub); font-size: 12px;
+    padding: 2px 8px; border-radius: 8px; margin-left: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Systemless Hosts</h1>
+<p class="sub">Blacklist manager and live pause switch</p>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <div class="status-text" id="statusText">Loading...</div>
+      <div class="status-sub" id="statusSub">Checking current state</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle" disabled>
+      <span class="slider"></span>
+    </label>
+  </div>
+</div>
+
+<div class="card">
+  <div class="add-row">
+    <input type="text" id="addInput" placeholder="domain.example.com" autocapitalize="off" autocorrect="off">
+    <button class="btn-primary" id="addBtn"><i class="ti ti-plus" aria-hidden="true"></i></button>
+  </div>
+  <input type="text" id="searchInput" placeholder="Search blacklist" autocapitalize="off" autocorrect="off">
+</div>
+
+<div class="card">
+  <div class="row" style="margin-bottom: 8px;">
+    <span class="sub" id="listLabel">Blacklist<span class="count-badge" id="countBadge">…</span></span>
+    <button class="btn-ghost" id="refreshBtn"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+  </div>
+  <div id="listContainer"></div>
+  <button class="btn-ghost load-more" id="loadMoreBtn" style="display:none;">Load more</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="index.js"></script>
+</body>
+</html>
