@@ -1,9 +1,8 @@
 # Systemless Hosts
 
 ## Overview
-- An efficient ad blocker, with a WebUI user interface
+- A standalone ad blocker, with a WebUI user interface
 - Supports Magisk / KernelSU / APatch root implementations
-- Use in conjunction with Adaway, or standalone
 
 ## Download Links (Archive)
 - [GitHub Releases](https://github.com/kgr-online/systemless-hosts/releases)
