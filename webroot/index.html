@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Systemless Hosts</title>
 <style>
   :root {
@@ -16,12 +16,26 @@
     }
   }
   * { box-sizing: border-box; }
+  html { height: 100%; }
   body {
-    margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+    margin: 0;
+    padding: max(24px, calc(env(safe-area-inset-top) + 12px)) 16px
+             max(16px, env(safe-area-inset-bottom)) 16px;
+    background: var(--bg); color: var(--text);
     font-family: -apple-system, Roboto, sans-serif; font-size: 15px;
+    min-height: 100%;
   }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
   .sub { color: var(--sub); font-size: 13px; margin: 0 0 16px; }
+  .section-label {
+    font-size: 12px; font-weight: 600; color: var(--sub); text-transform: uppercase;
+    letter-spacing: .04em; margin: 0 0 8px;
+  }
+  .error-banner {
+    display: none; background: var(--danger); color: white; padding: 10px 12px;
+    border-radius: 10px; font-size: 13px; margin-bottom: 12px;
+  }
+  .error-banner.show { display: block; }
   .card {
     background: var(--card); border: 1px solid var(--border); border-radius: 12px;
     padding: 14px; margin-bottom: 12px;
@@ -82,6 +96,8 @@
 <h1>Systemless Hosts</h1>
 <p class="sub">Blacklist manager and live pause switch</p>
 
+<div class="error-banner" id="errorBanner"></div>
+
 <div class="card">
   <div class="row">
     <div>
@@ -96,20 +112,49 @@
 </div>
 
 <div class="card">
+  <p class="section-label">Add domain to blacklist</p>
   <div class="add-row">
-    <input type="text" id="addInput" placeholder="domain.example.com" autocapitalize="off" autocorrect="off">
-    <button class="btn-primary" id="addBtn"><i class="ti ti-plus" aria-hidden="true"></i></button>
+    <input type="text" id="addInput" placeholder="e.g. ads.example.com" autocapitalize="off" autocorrect="off">
+    <button class="btn-primary" id="addBtn">Add</button>
   </div>
-  <input type="text" id="searchInput" placeholder="Search blacklist" autocapitalize="off" autocorrect="off">
+</div>
+
+<div class="card">
+  <div class="row" style="margin-bottom: 8px;">
+    <p class="section-label" style="margin: 0;">Import sources (like AdAway's lists)</p>
+    <button class="btn-primary" id="updateBtn" style="padding: 6px 12px; font-size: 13px;">Update now</button>
+  </div>
+  <div id="sourcesList" style="margin-bottom: 10px;"></div>
+  <div class="add-row">
+    <input type="text" id="sourceInput" placeholder="https://example.com/hosts" autocapitalize="off" autocorrect="off">
+    <button class="btn-primary" id="addSourceBtn">Add</button>
+  </div>
+  <div class="status-sub" id="updateStatus" style="margin-top: 8px;"></div>
+</div>
+
+<div class="card">
+  <p class="section-label">Search &amp; remove existing entries</p>
+  <div class="add-row">
+    <input type="text" id="searchInput" placeholder="Type to filter the blacklist" autocapitalize="off" autocorrect="off">
+    <button class="btn-primary" id="searchBtn">Search</button>
+  </div>
 </div>
 
 <div class="card">
   <div class="row" style="margin-bottom: 8px;">
     <span class="sub" id="listLabel">Blacklist<span class="count-badge" id="countBadge">…</span></span>
-    <button class="btn-ghost" id="refreshBtn"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+    <button class="btn-ghost" id="refreshBtn">Refresh</button>
   </div>
   <div id="listContainer"></div>
   <button class="btn-ghost load-more" id="loadMoreBtn" style="display:none;">Load more</button>
+</div>
+
+<div class="card">
+  <div class="row" style="margin-bottom: 8px;">
+    <span class="sub">Debug log</span>
+    <button class="btn-ghost" id="toggleDebugBtn">Show</button>
+  </div>
+  <pre id="debugLog" style="display:none; white-space: pre-wrap; word-break: break-all; font-size: 11px; font-family: ui-monospace, monospace; color: var(--sub); max-height: 300px; overflow-y: auto; margin: 0;"></pre>
 </div>
 
 <div class="toast" id="toast"></div>

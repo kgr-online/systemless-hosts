@@ -1,6 +1,6 @@
 id=systemless-hosts
 name=Systemless Hosts - Unified (WebUI)
 version=18.0
-versionCode=173
+versionCode=18000
 author=kgr-online
 description=An efficient ad blocker, with a WebUI for managing the blacklist and pausing filtering live

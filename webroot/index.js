@@ -11,28 +11,81 @@ let offset = 0;
 let currentQuery = "";
 let busy = false;
 
-function exec(command) {
+const EXEC_TIMEOUT_MS = 8000;
+
+// The KernelSU/APatch WebUI bridge only reliably handles one in-flight
+// exec() call at a time - firing several concurrently causes later calls'
+// callbacks to silently never fire. Everything funnels through this single
+// queue so calls always run one after another, never overlapping.
+let execChain = Promise.resolve();
+
+let debugEntries = [];
+
+function logDebug(command, result) {
+  debugEntries.unshift({ command, ...result, time: new Date().toLocaleTimeString() });
+  debugEntries = debugEntries.slice(0, 20);
+  const el = document.getElementById("debugLog");
+  if (el) {
+    el.textContent = debugEntries
+      .map((e) => `[${e.time}] $ ${e.command}\n  errno=${e.errno}\n  stdout="${e.stdout}"\n  stderr="${e.stderr}"`)
+      .join("\n\n");
+  }
+}
+
+function execRaw(command) {
   return new Promise((resolve) => {
     const cb = `__hosts_cb_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    window[cb] = (errno, stdout, stderr) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
       delete window[cb];
-      resolve({ errno, stdout: (stdout || "").trim(), stderr: (stderr || "").trim() });
+      logDebug(command, result);
+      resolve(result);
+    };
+    window[cb] = (errno, stdout, stderr) => {
+      finish({ errno, stdout: (stdout || "").trim(), stderr: (stderr || "").trim() });
     };
     try {
       if (window.ksu && typeof window.ksu.exec === "function") {
         window.ksu.exec(command, "{}", cb);
       } else {
-        resolve({ errno: -1, stdout: "", stderr: "no webui bridge found" });
+        finish({ errno: -1, stdout: "", stderr: "No WebUI bridge found (window.ksu is missing)." });
+        return;
       }
     } catch (e) {
-      resolve({ errno: -1, stdout: "", stderr: String(e) });
+      finish({ errno: -1, stdout: "", stderr: String(e) });
+      return;
     }
+    setTimeout(() => {
+      finish({ errno: -1, stdout: "", stderr: `Timed out waiting for a response (>${EXEC_TIMEOUT_MS / 1000}s).` });
+    }, EXEC_TIMEOUT_MS);
   });
+}
+
+function exec(command) {
+  const run = () => execRaw(command).then((result) => {
+    if (result.errno !== 0 && result.stderr) showError(result.stderr);
+    else clearError();
+    return result;
+  });
+  execChain = execChain.then(run, run);
+  return execChain;
 }
 
 function sh(...args) {
   const quoted = args.map((a) => `'${String(a).replace(/'/g, "'\\''")}'`).join(" ");
   return exec(`sh ${CTL} ${quoted}`);
+}
+
+function showError(msg) {
+  const el = document.getElementById("errorBanner");
+  el.textContent = msg;
+  el.classList.add("show");
+}
+
+function clearError() {
+  document.getElementById("errorBanner").classList.remove("show");
 }
 
 function toast(msg) {
@@ -162,10 +215,119 @@ const onSearch = debounce((value) => {
 document.getElementById("toggle").addEventListener("change", (e) => toggleFilter(e.target.checked));
 document.getElementById("addBtn").addEventListener("click", addDomain);
 document.getElementById("addInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addDomain(); });
+function runSearch() {
+  currentQuery = document.getElementById("searchInput").value.trim();
+  loadList(true);
+}
+
 document.getElementById("searchInput").addEventListener("input", (e) => onSearch(e.target.value));
+document.getElementById("searchBtn").addEventListener("click", runSearch);
+document.getElementById("searchInput").addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
 document.getElementById("refreshBtn").addEventListener("click", () => { refreshStatus(); refreshCount(); loadList(true); });
 document.getElementById("loadMoreBtn").addEventListener("click", () => loadList(false));
+document.getElementById("toggleDebugBtn").addEventListener("click", () => {
+  const el = document.getElementById("debugLog");
+  const btn = document.getElementById("toggleDebugBtn");
+  const show = el.style.display === "none";
+  el.style.display = show ? "block" : "none";
+  btn.textContent = show ? "Hide" : "Show";
+});
+
+function renderSources(lines) {
+  const container = document.getElementById("sourcesList");
+  if (lines.length === 0) {
+    container.innerHTML = '<div class="empty">No sources added - only the bundled default list is active</div>';
+    return;
+  }
+  container.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  lines.forEach((line) => {
+    const m = line.match(/^\s*(\d+)\s+(.*)$/);
+    if (!m) return;
+    const [, n, url] = m;
+    const row = document.createElement("div");
+    row.className = "list-item";
+    row.innerHTML = `<span style="word-break: break-all;">${escapeHtml(url)}</span>
+      <button class="btn-danger" data-n="${n}">Remove</button>`;
+    row.querySelector("button").addEventListener("click", () => removeSource(n));
+    frag.appendChild(row);
+  });
+  container.appendChild(frag);
+}
+
+async function loadSources() {
+  const { stdout } = await sh("src_list");
+  const lines = stdout ? stdout.split("\n").filter(Boolean) : [];
+  renderSources(lines);
+}
+
+async function addSource() {
+  const input = document.getElementById("sourceInput");
+  const url = input.value.trim();
+  if (!/^https?:\/\/.+/i.test(url)) {
+    toast("Enter a valid http(s) URL");
+    return;
+  }
+  const { stdout, errno } = await sh("src_add", url);
+  if (errno === 0 && stdout === "ok") {
+    toast("Source added - tap Update now to fetch it");
+    input.value = "";
+    await loadSources();
+  } else {
+    toast("Failed to add source");
+  }
+}
+
+async function removeSource(n) {
+  const { errno } = await sh("src_remove", n);
+  if (errno === 0) {
+    toast("Source removed");
+    await loadSources();
+  } else {
+    toast("Failed to remove source");
+  }
+}
+
+async function pollUpdateStatus() {
+  const { stdout } = await sh("update_status");
+  const statusEl = document.getElementById("updateStatus");
+  if (stdout.startsWith("running")) {
+    statusEl.textContent = "Fetching sources...";
+    setTimeout(pollUpdateStatus, 3000);
+  } else if (stdout.startsWith("done")) {
+    statusEl.textContent = "Up to date";
+    document.getElementById("updateBtn").disabled = false;
+    toast("Blacklist updated");
+    await refreshCount();
+    await loadList(true);
+  } else if (stdout.startsWith("error")) {
+    statusEl.textContent = "Last update had errors - see Debug log";
+    document.getElementById("updateBtn").disabled = false;
+    await refreshCount();
+    await loadList(true);
+  } else {
+    statusEl.textContent = "";
+    document.getElementById("updateBtn").disabled = false;
+  }
+}
+
+async function startUpdate() {
+  document.getElementById("updateBtn").disabled = true;
+  document.getElementById("updateStatus").textContent = "Starting...";
+  const { errno } = await sh("update");
+  if (errno !== 0) {
+    toast("Failed to start update");
+    document.getElementById("updateBtn").disabled = false;
+    return;
+  }
+  pollUpdateStatus();
+}
+
+document.getElementById("addSourceBtn").addEventListener("click", addSource);
+document.getElementById("sourceInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addSource(); });
+document.getElementById("updateBtn").addEventListener("click", startUpdate);
 
 refreshStatus();
 refreshCount();
 loadList(true);
+loadSources();
