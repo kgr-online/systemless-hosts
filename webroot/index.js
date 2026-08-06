@@ -168,11 +168,15 @@ async function toggleFilter(enable) {
   toast(errno === 0 ? (enable ? "Filtering resumed" : "Filtering paused") : "Failed to change state");
 }
 
+function isValidPattern(domain) {
+  return /^[a-z0-9*]([a-z0-9*-]{0,61}[a-z0-9*])?(\.[a-z0-9*]([a-z0-9*-]{0,61}[a-z0-9*])?)+$/.test(domain);
+}
+
 async function addDomain() {
   const input = document.getElementById("addInput");
   const domain = input.value.trim().toLowerCase();
-  if (!domain || !/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain)) {
-    toast("Enter a valid domain");
+  if (!domain || !isValidPattern(domain)) {
+    toast("Enter a valid domain or *.pattern");
     return;
   }
   const { stdout, errno } = await sh("add", domain);
@@ -181,6 +185,7 @@ async function addDomain() {
     input.value = "";
     await refreshCount();
     if (!currentQuery) await loadList(true);
+    if (domain.includes("*")) await loadPatterns();
   } else if (stdout === "exists") {
     toast("Already in the blacklist");
   } else {
@@ -327,7 +332,107 @@ document.getElementById("addSourceBtn").addEventListener("click", addSource);
 document.getElementById("sourceInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addSource(); });
 document.getElementById("updateBtn").addEventListener("click", startUpdate);
 
+function renderWhitelist(domains) {
+  const container = document.getElementById("whitelistList");
+  if (domains.length === 0) {
+    container.innerHTML = '<div class="empty">Nothing whitelisted</div>';
+    return;
+  }
+  container.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  domains.forEach((domain) => {
+    const row = document.createElement("div");
+    row.className = "list-item";
+    row.innerHTML = `<span>${escapeHtml(domain)}</span>
+      <button class="btn-danger" data-domain="${escapeHtml(domain)}">Remove</button>`;
+    row.querySelector("button").addEventListener("click", () => removeFromWhitelist(domain));
+    frag.appendChild(row);
+  });
+  container.appendChild(frag);
+}
+
+async function loadWhitelist() {
+  const { stdout } = await sh("whitelist_list");
+  const domains = stdout ? stdout.split("\n").filter(Boolean) : [];
+  renderWhitelist(domains);
+}
+
+async function addToWhitelist() {
+  const input = document.getElementById("whitelistInput");
+  const domain = input.value.trim().toLowerCase();
+  if (!domain || !isValidPattern(domain)) {
+    toast("Enter a valid domain or *.pattern");
+    return;
+  }
+  const { stdout, errno } = await sh("whitelist_add", domain);
+  if (errno === 0 && stdout === "ok") {
+    toast(`Whitelisted ${domain}`);
+    input.value = "";
+    await loadWhitelist();
+    await refreshCount();
+    await loadList(true);
+  } else if (stdout === "exists") {
+    toast("Already whitelisted");
+  } else {
+    toast("Failed to whitelist");
+  }
+}
+
+async function removeFromWhitelist(domain) {
+  const { errno } = await sh("whitelist_remove", domain);
+  if (errno === 0) {
+    toast(`Removed ${domain} from whitelist`);
+    await loadWhitelist();
+    await refreshCount();
+    await loadList(true);
+  } else {
+    toast("Failed to remove from whitelist");
+  }
+}
+
+document.getElementById("addWhitelistBtn").addEventListener("click", addToWhitelist);
+document.getElementById("whitelistInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addToWhitelist(); });
+
+function renderPatterns(patterns) {
+  const container = document.getElementById("patternList");
+  if (patterns.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  patterns.forEach((pattern) => {
+    const row = document.createElement("div");
+    row.className = "list-item";
+    row.innerHTML = `<span>${escapeHtml(pattern)}</span>
+      <button class="btn-danger" data-pattern="${escapeHtml(pattern)}">Remove</button>`;
+    row.querySelector("button").addEventListener("click", () => removePattern(pattern));
+    frag.appendChild(row);
+  });
+  container.appendChild(frag);
+}
+
+async function loadPatterns() {
+  const { stdout } = await sh("pattern_list");
+  const patterns = stdout ? stdout.split("\n").filter(Boolean) : [];
+  renderPatterns(patterns);
+}
+
+async function removePattern(pattern) {
+  const { errno } = await sh("pattern_remove", pattern);
+  if (errno === 0) {
+    toast(`Removed pattern ${pattern}`);
+    await loadPatterns();
+    await refreshCount();
+    if (!currentQuery) await loadList(true);
+  } else {
+    toast("Failed to remove pattern");
+  }
+}
+
 refreshStatus();
 refreshCount();
 loadList(true);
 loadSources();
+loadWhitelist();
+loadPatterns();

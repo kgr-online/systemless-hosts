@@ -112,10 +112,20 @@
 </div>
 
 <div class="card">
-  <p class="section-label">Add domain to blacklist</p>
+  <p class="section-label">Add domain to blacklist (* wildcards allowed)</p>
+  <div id="patternList" style="margin-bottom: 10px;"></div>
   <div class="add-row">
-    <input type="text" id="addInput" placeholder="e.g. ads.example.com" autocapitalize="off" autocorrect="off">
+    <input type="text" id="addInput" placeholder="ads.example.com or *.doubleclick.net" autocapitalize="off" autocorrect="off">
     <button class="btn-primary" id="addBtn">Add</button>
+  </div>
+</div>
+
+<div class="card">
+  <p class="section-label">Whitelist (always allowed, * wildcards allowed)</p>
+  <div id="whitelistList" style="margin-bottom: 10px;"></div>
+  <div class="add-row">
+    <input type="text" id="whitelistInput" placeholder="reddit.com or *.reddit.com" autocapitalize="off" autocorrect="off">
+    <button class="btn-primary" id="addWhitelistBtn">Add</button>
   </div>
 </div>
 
